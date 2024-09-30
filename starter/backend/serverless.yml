@@ -1,13 +1,35 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: satyar2003
+# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+app: serverless-todo-app
 service: serverless-todo-app
 
 plugins:
   - serverless-iam-roles-per-function
 
-frameworkVersion: '3'
 
 provider:
   name: aws
-  runtime: nodejs14.x
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'dev'}
+  region: 'us-east-1'
+  environment:
+    TODOS_TABLE: Todos-${self:provider.stage}
+    TODOS_CREATED_AT_INDEX: CreatedAtIndex
+    ATTACHMENTS_S3_BUCKET: serverless-todo-app-attachments-${self:provider.stage}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+    - Effect: Allow
+      Action:
+        - s3:PutObject
+      Resource: arn:aws:s3:::${self:provider.environment.ATTACHMENTS_S3_BUCKET}/*
 
 functions:
 
@@ -21,6 +43,14 @@ functions:
       - http:
           method: get
           path: todos
+          cors: true
+    iamRoleStatmentsInherit: true
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - 'dynamodb:Query'
+        Resource:
+          - 'arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.todosTable}'
 
   # TODO: Configure this function
   CreateTodo:
@@ -29,6 +59,14 @@ functions:
       - http:
           method: post
           path: todos
+          cors: true
+    iamRoleStatementsInherit: true
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - 'dynamodb:PutItem'
+        Resource:
+          - 'arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.todosTable}'
 
   # TODO: Configure this function
   UpdateTodo:
@@ -37,6 +75,14 @@ functions:
       - http:
           method: patch
           path: todos/{todoId}
+          cors: true
+    iamRoleStatementsInherit: true
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - 'dynamodb:UpdateItem'
+        Resource:
+          - 'arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.todosTable}'
 
   # TODO: Configure this function
   DeleteTodo:
@@ -45,6 +91,14 @@ functions:
       - http:
           method: delete
           path: todos/{todoId}
+          cors: true
+    iamRoleStatementsInherit: true
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - 'dynamodb:DeleteItem'
+        Resource:
+          - 'arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.todosTable}'
 
   # TODO: Configure this function
   GenerateUploadUrl:
@@ -53,7 +107,24 @@ functions:
       - http:
           method: post
           path: todos/{todoId}/attachment
+          cors: true
+    iamRoleStatementsInherit: true
+    iamRoleStatements:
+      - Effect: 'Allow'
+        Action:
+          - 's3:PutObject'
+        Resource:
+          - 'arn:aws:s3:::${self:custom.bucketName}/*'
 
 resources:
   Resources:
     # TODO: Add any necessary AWS resources
+    AttachmentsBucket:
+      Type: 'AWS::S3::Bucket'
+      Properties:
+        BucketName: ${self:custom.bucketName}
+
+custom:
+  todosTable: 'TodosTable'
+  bucketName: 'serverless-todo-app-uploads'
+  signedUrlExpiration: 300
